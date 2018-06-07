@@ -8,7 +8,7 @@ from .mininode import *
 from .script import CScript, OP_TRUE, OP_CHECKSIG, OP_RETURN
 
 # Create a block (with regtest difficulty)
-def create_block(hashprev, coinbase, nTime=None):
+def create_block(hashprev, coinbase, nTime=None, nBits=0x207fffff):
     block = CBlock()
     # Dogecoin: Create a non-AuxPoW block but include chain ID
     block.nVersion = 0x620003
@@ -18,7 +18,7 @@ def create_block(hashprev, coinbase, nTime=None):
     else:
         block.nTime = nTime
     block.hashPrevBlock = hashprev
-    block.nBits = 0x207fffff # Will break after a difficulty adjustment...
+    block.nBits = nBits
     block.vtx.append(coinbase)
     block.hashMerkleRoot = block.calc_merkle_root()
     block.calc_sha256()
@@ -27,6 +27,44 @@ def create_block(hashprev, coinbase, nTime=None):
 # From BIP141
 WITNESS_COMMITMENT_HEADER = b"\xaa\x21\xa9\xed"
 
+def dogecoinNextWorkRequired(tip, tip_prev, height):
+    spacing_timespan = 5 # nPowTargetSpacing
+    digishield = height >= 10 # digishieldConsensus.nHeightEffective = 10
+    actual_timespan = tip.nTime - tip_prev.nTime
+    if digishield:
+        retarget_timespan = spacing_timespan # digishieldConsensus.nPowTargetTimespan
+        timespan_diff = actual_timespan - retarget_timespan
+        modulated_timespan = retarget_timespan + python_division_negative_roundup(timespan_diff, 8)
+        min_timespan = retarget_timespan - (retarget_timespan // 4)
+        max_timespan = retarget_timespan + (retarget_timespan // 2)
+    else:
+        retarget_timespan = 4 * 60 * 60 # nPowTargetTimespan
+        modulated_timespan = actual_timespan
+        min_timespan = retarget_timespan // 16
+        max_timespan = retarget_timespan * 4
+
+    if height % (retarget_timespan // spacing_timespan) != 0:
+        return tip.nBits
+
+    if modulated_timespan < min_timespan:
+        modulated_timespan = min_timespan
+    elif modulated_timespan > max_timespan:
+        modulated_timespan = max_timespan
+
+    bnNew = uint256_from_compact(tip.nBits)
+    # dogecoin.cpp: bnNew *= nModulatedTimespan;
+    bnNew *= modulated_timespan
+    # dogecoin.cpp: bnNew /= retargetTimespan;
+    bnNew //= retarget_timespan
+
+    return uint256_to_compact(bnNew)
+
+def python_division_negative_roundup(numerator, divisor):
+    if (numerator < 0) and (numerator % divisor != 0):
+        python_floor_divison_offset = 1
+    else:
+        python_floor_divison_offset = 0
+    return numerator // divisor + python_floor_divison_offset
 
 def get_witness_script(witness_root, witness_nonce):
     witness_commitment = uint256_from_str(hash256(ser_uint256(witness_root)+ser_uint256(witness_nonce)))
@@ -72,7 +110,7 @@ def serialize_script_num(value):
 # otherwise an anyone-can-spend output.
 def create_coinbase(height, pubkey = None):
     coinbase = CTransaction()
-    coinbase.vin.append(CTxIn(COutPoint(0, 0xffffffff), 
+    coinbase.vin.append(CTxIn(COutPoint(0, 0xffffffff),
                 ser_string(serialize_script_num(height)), 0xffffffff))
     coinbaseoutput = CTxOut()
     coinbaseoutput.nValue = 500000 * COIN

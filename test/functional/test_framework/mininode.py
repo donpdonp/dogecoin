@@ -138,6 +138,25 @@ def uint256_from_compact(c):
     v = (c & 0xFFFFFF) << (8 * (nbytes - 3))
     return v
 
+def uint256_to_compact(uint):
+    bits = uint265_count_bits(uint)
+    size = (bits + 7) // 8
+    compact = 0
+    if size <= 3:
+        compact = (uint & 0xffffffffffffffff) << 8 * (3 - size)
+    else:
+        compact = (uint >> 8 * (size - 3)) & 0xffffffffffffffff
+    if compact & 0x00800000 :
+        compact >>= 8
+        size = size + 1
+    compact |= size << 24
+    return compact
+
+def uint265_count_bits(uint):
+    for pos in range(255, 0, -1):
+        if uint >> pos & 1:
+            return pos + 1
+    return 0
 
 def deser_vector(f, c):
     nit = deser_compact_size(f)
@@ -529,19 +548,24 @@ class CTransaction(object):
 
 class CBlockHeader(object):
     def __init__(self, header=None):
-        if header is None:
-            self.set_null()
-        else:
-            self.nVersion = header.nVersion
-            self.hashPrevBlock = header.hashPrevBlock
-            self.hashMerkleRoot = header.hashMerkleRoot
-            self.nTime = header.nTime
-            self.nBits = header.nBits
-            self.nNonce = header.nNonce
-            self.sha256 = header.sha256
-            self.hash = header.hash
-            self.scrypt256 = header.scrypt256
-            self.calc_sha256()
+        self.set_null()
+        if header is not None:
+            if type(header) == dict:
+                self.nVersion = header['version']
+                if 'previousblockhash' in header: # Genesis block
+                    self.hashPrevBlock = int(header['previousblockhash'], 16)
+                self.hashMerkleRoot = int(header['merkleroot'], 16)
+                self.nTime = header['time']
+                self.nBits = int(header['bits'], 16)
+                self.nNonce = header['nonce']
+            else:
+                self.nVersion = header.nVersion
+                self.hashPrevBlock = header.hashPrevBlock
+                self.hashMerkleRoot = header.hashMerkleRoot
+                self.nTime = header.nTime
+                self.nBits = header.nBits
+                self.nNonce = header.nNonce
+            self.rehash()
 
     def set_null(self):
         self.nVersion = 1
