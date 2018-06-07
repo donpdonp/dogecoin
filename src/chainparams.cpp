@@ -369,7 +369,7 @@ public:
         consensus.BIP66Height = 1251; // BIP66 activated on regtest (Used in rpc activation tests)
         consensus.powLimit = uint256S("0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"); // ~uint256(0) >> 1;
         consensus.nPowTargetTimespan = 4 * 60 * 60; // pre-digishield: 4 hours
-        consensus.nPowTargetSpacing = 1; // regtest: 1 second blocks
+        consensus.nPowTargetSpacing = 5; // regtest: 5 second blocks
         consensus.fDigishieldDifficultyCalculation = false;
         consensus.fPowAllowMinDifficultyBlocks = true;
         consensus.fPowNoRetargeting = true;
@@ -402,7 +402,7 @@ public:
 
         digishieldConsensus = consensus;
         digishieldConsensus.nHeightEffective = 10;
-        digishieldConsensus.nPowTargetTimespan = 1; // regtest: also retarget every second in digishield mode, for conformity
+        digishieldConsensus.nPowTargetTimespan = 5; // regtest: also retarget every second in digishield mode, for conformity
         digishieldConsensus.fDigishieldDifficultyCalculation = true;
 
         auxpowConsensus = digishieldConsensus;
